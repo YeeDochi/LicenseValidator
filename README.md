@@ -195,11 +195,11 @@ public class MacAddressValidator implements LicenseValidator {
 
 ## **6. 커스텀 검증기 만들기**
 
-`BusinessRuleValidator` 인터페이스를 구현하여 프로젝트에 특화된 자신만의 검증 규칙을 만들 수 있습니다.
+`LicenseValidator` 인터페이스를 구현하여 프로젝트에 특화된 자신만의 검증 규칙을 만들 수 있습니다.
 
 ~~~java
 // 예시: 특정 제품 이름이 포함되어 있는지 검증하는 커스텀 Validator
-public class ProductNameValidator implements BusinessRuleValidator {
+public class ProductNameValidator implements LicenseValidator {
     
     @Override
     public boolean validate(License license) {
