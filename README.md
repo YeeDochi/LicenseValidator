@@ -82,9 +82,115 @@ if (isValid) {
 ## **5. 기본 제공 검증기 (Validators)**
 
 * **`ExpiryDateValidator`**: 라이선스의 만료일을 현재 날짜와 비교하여 유효 기간을 검증합니다.
+```java
+public class ExpiryDateValidator implements LicenseValidator {
+    @Override
+    public boolean validate(LicenseProtos.License license) {
+        String expiryDateStr = license.getExpireDate();
+
+        // 만료일이 설정되지 않았다면, 영구 라이선스로 간주하고 통과
+        if (expiryDateStr == null || expiryDateStr.isEmpty()) {
+            return true;
+        }
+        try {
+            // "YYYY-MM-DD" 형식의 날짜 문자열을 파싱
+            LocalDate expiryDate = LocalDate.parse(expiryDateStr);
+            LocalDate today = LocalDate.now();
+            System.out.println("today: " + today+" expiryDate: " + expiryDate);
+            // 오늘 날짜가 만료일 이후가 아니어야 함
+            return !today.isAfter(expiryDate);
+        } catch (DateTimeParseException e) {
+            // 날짜 형식이 잘못된 경우 유효하지 않은 것으로 처리
+            System.err.println("잘못된 날짜 형식입니다: " + expiryDateStr);
+            return false;
+        }
+    }
+
+    @Override
+    public String getErrorMessage() {
+        return "라이선스 기간이 만료되었습니다.";
+    }
+}
+```
+  
 * **`CoreCountValidator`**: 시스템의 CPU 코어 수가 라이선스에 명시된 허용치를 초과하는지 검증합니다.
+```java
+public class CoreCountValidator implements LicenseValidator {
+
+    @Override
+    public boolean validate(LicenseProtos.License license) {
+        int licensedCores = license.getCoreCount();
+
+        // 체크해야할 항목이 0이라면 뭔가 잘못된것
+        if (licensedCores <= 0) {
+            return false;
+        }
+        // 실제 시스템의 코어 수를 가져옴
+        int systemCores = Runtime.getRuntime().availableProcessors();
+        System.out.println(systemCores +", "+ licensedCores);
+        // 시스템의 코어 수가 라이선스에 허용된 코어 수보다 작거나 같아야 함
+        return systemCores <= licensedCores;
+    }
+
+    @Override
+    public String getErrorMessage() {
+        return "시스템의 CPU 코어 수가 라이선스 허용치를 초과합니다.";
+    }
+}
+
+```
+  
 * **`MacAddressValidator`**: 시스템의 MAC 주소가 라이선스에 귀속된 주소와 일치하는지 검증합니다.
-* **`BoardSerialValidator`**: 시스템의 메인보드 시리얼 번호가 라이선스에 귀속된 번호와 일치하는지 검증합니다. (OS별 명령어 실행 필요)
+```java
+public class MacAddressValidator implements LicenseValidator {
+
+    private final Set<String> systemMacAddresses;
+
+    public MacAddressValidator() {
+        this.systemMacAddresses = getSystemMacAddresses();
+    }
+
+    @Override
+    public boolean validate(License license) {
+        String licenseMac = license.getMacAddress().replaceAll("[-:]", "").toUpperCase();
+
+
+        if (licenseMac.isEmpty()) {
+            return true;
+        }
+        return systemMacAddresses.contains(licenseMac);
+    }
+
+    @Override
+    public String getErrorMessage() {
+        return "라이선스가 허가된 장비의 MAC 주소와 일치하지 않습니다.";
+    }
+
+    private Set<String> getSystemMacAddresses() {
+        Set<String> macs = new HashSet<>();
+        try {
+            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
+                // 가상 인터페이스나 루프백 인터페이스는 제외하고, 물리적인 하드웨어 주소만 필터링
+                if (ni.isLoopback() || ni.isVirtual() || !ni.isUp()) {
+                    continue;
+                }
+                byte[] hardwareAddress = ni.getHardwareAddress();
+                if (hardwareAddress != null) {
+                    StringBuilder sb = new StringBuilder();
+                    for (byte b : hardwareAddress) {
+                        sb.append(String.format("%02X", b));
+                    }
+                    macs.add(sb.toString());
+                }
+            }
+        } catch (Exception e) {
+            System.err.println("MAC 주소를 가져오는 데 실패했습니다: " + e.getMessage());
+        }
+        return macs;
+    }
+}
+```
+  
 * 해당 검증기들은 개발이 더 필요합니다.
 
 ## **6. 커스텀 검증기 만들기**
