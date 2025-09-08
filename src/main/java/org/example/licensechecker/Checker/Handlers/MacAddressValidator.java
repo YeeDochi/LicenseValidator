@@ -18,12 +18,10 @@ public class MacAddressValidator implements LicenseValidator {
     public boolean validate(License license) {
         String licenseMac = license.getMacAddress().replaceAll("[-:]", "").toUpperCase();
 
-        // 라이선스에 MAC 주소가 지정되지 않았다면, 장비 제한이 없는 것으로 간주하고 통과
+
         if (licenseMac.isEmpty()) {
             return true;
         }
-
-        // 시스템의 MAC 주소 중 라이선스에 명시된 주소가 있는지 확인
         return systemMacAddresses.contains(licenseMac);
     }
 
@@ -32,10 +30,6 @@ public class MacAddressValidator implements LicenseValidator {
         return "라이선스가 허가된 장비의 MAC 주소와 일치하지 않습니다.";
     }
 
-    /**
-     * 현재 시스템의 모든 유효한 MAC 주소를 가져옵니다.
-     * @return MAC 주소 Set
-     */
     private Set<String> getSystemMacAddresses() {
         Set<String> macs = new HashSet<>();
         try {

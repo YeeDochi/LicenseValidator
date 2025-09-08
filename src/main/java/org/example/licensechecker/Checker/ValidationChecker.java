@@ -11,20 +11,20 @@ public class ValidationChecker {
     private final LicenseSignatureChecker licenseSignatureChecker;
     private final List<LicenseValidator> validators;
 
-    // 생성자는 private으로 막아서 Builder를 통해서만 생성하도록 강제
+    // Builder라 프라이빗으로
     private ValidationChecker(LicenseSignatureChecker licenseSignatureChecker, List<LicenseValidator> validators) {
         this.licenseSignatureChecker = licenseSignatureChecker;
         this.validators = validators;
     }
 
-    // 실제 검증을 수행하는 메소드
+
     public boolean check(String licenseSirial) {
         try {
-            // 1. 암호학적 검증 (위변조 확인)
+            // RSA
             LicenseProtos.License license = licenseSignatureChecker.decodeLicenseKey(licenseSirial);
             if (license == null) return false;
 
-            // 2. 비즈니스 규칙 검증
+            // 하드웨어와 대조
             for (LicenseValidator validator : validators) {
                 if (!validator.validate(license)) {
                     System.err.println("라이선스 규칙 위반: " + validator.getErrorMessage());
@@ -58,7 +58,7 @@ public class ValidationChecker {
 
         public ValidationChecker build() {
             if (publicKey == null || publicKey.isEmpty()) {
-                throw new IllegalStateException("공개키는 반드시 필요합니다.");
+                throw new IllegalStateException("공개키가 없습니다.");
             }
             LicenseSignatureChecker cryptoValidator = new LicenseSignatureChecker(publicKey);
             return new ValidationChecker(cryptoValidator, new ArrayList<>(ruleValidators));

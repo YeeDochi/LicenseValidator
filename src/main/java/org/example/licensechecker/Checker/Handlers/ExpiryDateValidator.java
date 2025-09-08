@@ -20,7 +20,7 @@ public class ExpiryDateValidator implements LicenseValidator {
             LocalDate expiryDate = LocalDate.parse(expiryDateStr);
             LocalDate today = LocalDate.now();
             System.out.println("today: " + today+" expiryDate: " + expiryDate);
-            // 오늘 날짜가 만료일 이후가 아니어야 함 (만료일 당일까지는 유효)
+            // 오늘 날짜가 만료일 이후가 아니어야 함
             return !today.isAfter(expiryDate);
         } catch (DateTimeParseException e) {
             // 날짜 형식이 잘못된 경우 유효하지 않은 것으로 처리

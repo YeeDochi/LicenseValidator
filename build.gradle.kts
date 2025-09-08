@@ -20,11 +20,10 @@ repositories {
 }
 
 dependencies {
-    // API 의존성 (이 라이브러리를 사용하는 프로젝트에게 전파됨)
+
     api("com.google.protobuf:protobuf-java:4.27.2")
     api("commons-codec:commons-codec:1.16.0")
 
-    // 테스트용 의존성
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.10.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.10.0")
 }
