@@ -2,7 +2,6 @@ package org.example.licensechecker.Checker;
 
 import org.example.licensechecker.Checker.Handlers.LicenseValidator;
 import org.example.licensechecker.DTO.LicenseBody;
-import org.example.licensechecker.Vaildator.LicenseSignatureChecker;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -31,7 +30,6 @@ public class ValidationChecker {
                     return false;
                 }
             }
-
             System.out.println("모든 라이선스 검증을 통과했습니다.");
             return true;
 
@@ -41,12 +39,14 @@ public class ValidationChecker {
         }
     }
 
+    public String getVirsion(String licenseKey)  throws Exception{
+        return licenseSignatureChecker.getVirsion(licenseKey);
+    }
+
     // --- Builder 클래스 ---
     public static class Builder {
 
-
         private final List<LicenseValidator> ruleValidators = new ArrayList<>();
-
 
         public Builder addRule(LicenseValidator validator) {
             this.ruleValidators.add(validator);

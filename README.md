@@ -1,221 +1,83 @@
-# **라이선스 검증 라이브러리 (License Validator Library)**
+# Java 라이선스 검증 라이브러리 
 
-## **1. 개요**
+## ✨ 주요 기능
 
-이 프로젝트는 프로토콜 버퍼(Protocol Buffers)와 비대칭 키 암호화(RSA)를 기반으로 하는 Java용 소프트웨어 라이선스 키 검증 라이브러리입니다. 
+-   **자체 검증 가능한 키 구조**: 라이선스 키는 `헤더.본문.서명`의 세 부분으로 구성됩니다. 서명 검증에 필요한 **공개키는 본문(Body) 내에 포함**되어 있어, 라이선스 키 하나만으로 무결성 검증이 가능합니다.
+-   **디지털 서명 검증**: RSA 및 SHA256 알고리즘을 사용하여 라이선스 키가 변조되지 않았는지 확인합니다.
+-   **유연한 검증 규칙**: 빌더(Builder) 패턴을 통해 만료일 검사 등 필요한 검증 규칙을 동적으로 추가할 수 있습니다.
+-   **쉬운 통합**: 간단한 API를 통해 모든 Java 프로젝트에 쉽게 통합하여 사용할 수 있습니다.
 
+---
 
-## **2. 주요 기능**
+## 🏗️ 프로젝트 구조
 
-* 프로토콜 버퍼를 사용하여 라이선스 정보를 작고 효율적인 바이너리 형식으로 직렬화합니다.
-* `BusinessRuleValidator` 인터페이스를 통해 만료일, 하드웨어 정보(MAC 주소, 보드 시리얼), CPU 코어 수 등 다양한 비즈니스 규칙을 조합하여 사용할 수 있습니다.
-*  `BusinessRuleValidator` 인터페이스를 직접 구현하여, 프로젝트에 필요한 완전히 새로운 커스텀 검증 규칙을 라이브러리 수정 없이 쉽게 추가할 수 있습니다.
+-   **`DTO`**: 라이선스 키의 데이터 구조를 정의하는 Record 클래스들을 포함합니다.
+    -   `LicenseHeader`: 라이선스 버전(`license_v`) 정보를 담습니다.
+    -   `LicenseBody`: 라이선스 만료일, 고객 정보, 그리고 **공개키** 등 핵심 데이터를 담습니다.
+-   **`Checker`**: 전체 검증 프로세스를 관리하고 구성합니다.
+    -   `LicenseSignatureChecker`: 라이선스의 암호화 서명을 해독하고 유효성을 검사하는 핵심 로직을 담당합니다.
+    -   `ValidationChecker`: 빌더를 통해 생성되며, 서명 검증 후 추가적인 규칙(핸들러)들을 순차적으로 실행합니다.
+-   **`Checker.Handlers`**: 개별 검증 규칙을 정의하는 인터페이스와 구현체들을 포함합니다.
+    -   `LicenseValidator`: 모든 검증 핸들러가 구현해야 하는 공통 인터페이스입니다.
+    -   `ExpiryDateValidator`: 라이선스의 만료일을 검증하는 구현체입니다.
 
-## **3. 설치 및 설정**
+---
 
-### **3.1. 의존성 추가**
-이 라이브러리는 현재 로컬 `.jar` 파일을 직접 참조하는 방식으로 설정합니다.
+## 🛠️ 작동 방식
 
-1.  프로젝트의 `libs` 폴더를 생성하고, 이 라이브러리의 `.jar` 파일(예: `licenseChecker-1.0.0.jar`)을 복사합니다. .jar파일은 `build/libs` 디렉토리 안에 있습니다.
-2.  사용할 프로젝트의 `build.gradle.kts` 파일에 아래 내용을 추가합니다.
+1.  **빌더(Builder) 생성**: `ValidationChecker.Builder`를 생성합니다. 이 버전에서는 **별도로 공개키를 전달할 필요가 없습니다.**
+2.  **검증 규칙 추가**: 필요한 검증 규칙(예: `ExpiryDateValidator`)을 빌더에 추가합니다.
+3.  **`ValidationChecker` 생성**: `build()` 메서드를 호출하여 `ValidationChecker` 인스턴스를 생성합니다.
+4.  **라이선스 검증**: `check()` 메서드에 검증할 라이선스 키(시리얼)를 전달합니다.
+5.  **내부 처리 과정**:
+    -   `LicenseSignatureChecker`가 라이선스 키를 점(`.`) 기준으로 헤더, 본문, 서명 세 부분으로 분리합니다.
+    -   Base64Url로 인코딩된 본문을 디코딩하여 JSON 데이터를 객체(`LicenseBody`)로 변환합니다.
+    -   `LicenseBody` 객체 안에서 **공개키 문자열을 추출**합니다.
+    -   추출된 공개키를 사용하여 서명이 유효한지 검증합니다. 서명이 유효하지 않으면 즉시 예외가 발생하며 실패 처리됩니다.
+    -   서명이 유효하면, 빌더에 추가된 각 `LicenseValidator` 핸들러들이 순서대로 실행됩니다. 예를 들어 `ExpiryDateValidator`는 현재 날짜와 라이선스의 만료일을 비교합니다.
+    -   하나의 규칙이라도 실패하면 전체 검증은 실패로 간주됩니다.
+6.  **결과 반환**: 모든 서명 검증과 규칙 검사를 통과하면 `true`를, 그렇지 않으면 `false`를 반환합니다.
 
-~~~kotlin
-dependencies {
-    // 1. 라이브러리 JAR 파일 직접 참조
-    implementation(files("libs/licenseChecker-1.0.0.jar"))
+---
 
-    // 2. 라이브러리가 필요로 하는 의존성들을 직접 추가
-    // (추후 JitPack 또는 사내 Maven 저장소로 이전 시 이 부분은 불필요해짐)
-    implementation("commons-codec:commons-codec:1.16.0")
-    implementation("com.google.protobuf:protobuf-java:4.27.2")
-}
-~~~
+## 🚀 사용 예시
 
-### **3.2. (스프링 부트 환경) Bean으로 등록**
-스프링 부트 환경에서는 `@Configuration` 클래스를 통해 `ValidationChecker`를 Bean으로 등록하여 편리하게 사용할 수 있습니다.
+라이브러리를 사용하여 라이선스 키를 검증하는 방법은 다음과 같습니다.
 
 ~~~java
-@Configuration
-public class LicenseCheckerConfig {
+import org.example.licensechecker.Checker.Handlers.ExpiryDateValidator;
+import org.example.licensechecker.Checker.ValidationChecker;
 
-    @Value("${license.public-key}")
-    private String publicKey;
+public class Main {
+    public static void main(String[] args) {
+        // 1. 검증할 라이선스 키
+        // 이 키의 Body 부분에는 서명 검증에 필요한 공개키가 포함되어 있습니다.
+        String licenseKey = "eyJsaWNlbnNlX3YiOiIxLjAifQ.eyJleHBpcmF0aW9uIjoiMjA5OS0xMi0zMSIsInV1aWQiOiJ0ZXN0LXV1aWQiLCJjdXN0b21lcmlkIjoidGVzdC1jdXN0b21lciIsInNvbHV0aW9uIjoiTXlBcHAiLCJwdWJsaWNLZXkiOiJNSUlCSWpBTkJna3Foa2lHOXcwQkFRRUZBQU9DQVE4QU1JSUJDZ0tDQVFFQT...In0.signature-part";
 
-    @Bean
-    public ValidationChecker licenseChecker() {
-        return new ValidationChecker.Builder()
-                .withPublicKey(publicKey)
-                .addRule(new ExpiryDateValidator())
-                .addRule(new CoreCountValidator())
-                .addRule(new MacAddressValidator())
+        // 2. 빌더를 사용하여 검증기 생성 및 규칙 추가
+        // 별도의 공개키를 제공할 필요가 없습니다.
+        ValidationChecker checker = new ValidationChecker.Builder()
+                .addRule(new ExpiryDateValidator()) // 만료일 검증 규칙 추가
+                // .addRule(new YourCustomValidator()) // 필요시 다른 검증 규칙을 직접 구현하여 추가할 수 있습니다.
                 .build();
-    }
-}
-~~~
 
-## **4. 사용법**
+        // 3. 라이선스 키 검증 실행
+        boolean isValid = checker.check(licenseKey);
 
-`ValidationChecker.Builder`를 사용하여 필요한 공개키와 검증 규칙들을 설정한 후, `check()` 메소드에 라이선스 키 문자열을 전달하여 유효성을 검증합니다.
-
-~~~java
-// 스프링 환경이 아닐 경우
-String publicKey = "MIIB..."; // 파일 등에서 읽어온 공개키
-String licenseKey = "XXXX-XXXX-XXXX-...."; // 검증할 라이선스 키
-
-// 1. 빌더를 통해 검증기 생성 및 설정
-ValidationChecker checker = new ValidationChecker.Builder()
-        .withPublicKey(publicKey)
-        .addRule(new ExpiryDateValidator())
-        .addRule(new MacAddressValidator())
-        .build();
-
-// 2. 라이선스 키 검증 실행
-boolean isValid = checker.check(licenseKey);
-
-if (isValid) {
-    System.out.println("라이선스가 유효합니다.");
-} else {
-    System.out.println("유효하지 않은 라이선스입니다.");
-}
-~~~
-
-## **5. 기본 제공 검증기 (Validators)**
-
-* **`ExpiryDateValidator`**: 라이선스의 만료일을 현재 날짜와 비교하여 유효 기간을 검증합니다.
-```java
-public class ExpiryDateValidator implements LicenseValidator {
-    @Override
-    public boolean validate(LicenseProtos.License license) {
-        String expiryDateStr = license.getExpireDate();
-
-        // 만료일이 설정되지 않았다면, 영구 라이선스로 간주하고 통과
-        if (expiryDateStr == null || expiryDateStr.isEmpty()) {
-            return true;
+        // 4. 결과 확인
+        if (isValid) {
+            System.out.println("라이선스가 유효합니다. 애플리케이션을 시작합니다.");
+        } else {
+            System.out.println("유효하지 않은 라이선스입니다. 애플리케이션을 종료합니다.");
         }
+
+        // 버전 정보 가져오기 (선택 사항)
         try {
-            // "YYYY-MM-DD" 형식의 날짜 문자열을 파싱
-            LocalDate expiryDate = LocalDate.parse(expiryDateStr);
-            LocalDate today = LocalDate.now();
-            System.out.println("today: " + today+" expiryDate: " + expiryDate);
-            // 오늘 날짜가 만료일 이후가 아니어야 함
-            return !today.isAfter(expiryDate);
-        } catch (DateTimeParseException e) {
-            // 날짜 형식이 잘못된 경우 유효하지 않은 것으로 처리
-            System.err.println("잘못된 날짜 형식입니다: " + expiryDateStr);
-            return false;
-        }
-    }
-
-    @Override
-    public String getErrorMessage() {
-        return "라이선스 기간이 만료되었습니다.";
-    }
-}
-```
-  
-* **`CoreCountValidator`**: 시스템의 CPU 코어 수가 라이선스에 명시된 허용치를 초과하는지 검증합니다.
-```java
-public class CoreCountValidator implements LicenseValidator {
-
-    @Override
-    public boolean validate(LicenseProtos.License license) {
-        int licensedCores = license.getCoreCount();
-
-        // 체크해야할 항목이 0이라면 뭔가 잘못된것
-        if (licensedCores <= 0) {
-            return false;
-        }
-        // 실제 시스템의 코어 수를 가져옴
-        int systemCores = Runtime.getRuntime().availableProcessors();
-        System.out.println(systemCores +", "+ licensedCores);
-        // 시스템의 코어 수가 라이선스에 허용된 코어 수보다 작거나 같아야 함
-        return systemCores <= licensedCores;
-    }
-
-    @Override
-    public String getErrorMessage() {
-        return "시스템의 CPU 코어 수가 라이선스 허용치를 초과합니다.";
-    }
-}
-
-```
-  
-* **`MacAddressValidator`**: 시스템의 MAC 주소가 라이선스에 귀속된 주소와 일치하는지 검증합니다.
-```java
-public class MacAddressValidator implements LicenseValidator {
-
-    private final Set<String> systemMacAddresses;
-
-    public MacAddressValidator() {
-        this.systemMacAddresses = getSystemMacAddresses();
-    }
-
-    @Override
-    public boolean validate(License license) {
-        String licenseMac = license.getMacAddress().replaceAll("[-:]", "").toUpperCase();
-
-
-        if (licenseMac.isEmpty()) {
-            return true;
-        }
-        return systemMacAddresses.contains(licenseMac);
-    }
-
-    @Override
-    public String getErrorMessage() {
-        return "라이선스가 허가된 장비의 MAC 주소와 일치하지 않습니다.";
-    }
-
-    private Set<String> getSystemMacAddresses() {
-        Set<String> macs = new HashSet<>();
-        try {
-            for (NetworkInterface ni : Collections.list(NetworkInterface.getNetworkInterfaces())) {
-                // 가상 인터페이스나 루프백 인터페이스는 제외하고, 물리적인 하드웨어 주소만 필터링
-                if (ni.isLoopback() || ni.isVirtual() || !ni.isUp()) {
-                    continue;
-                }
-                byte[] hardwareAddress = ni.getHardwareAddress();
-                if (hardwareAddress != null) {
-                    StringBuilder sb = new StringBuilder();
-                    for (byte b : hardwareAddress) {
-                        sb.append(String.format("%02X", b));
-                    }
-                    macs.add(sb.toString());
-                }
-            }
+            String version = checker.getVirsion(licenseKey);
+            System.out.println("라이선스 버전: " + version);
         } catch (Exception e) {
-            System.err.println("MAC 주소를 가져오는 데 실패했습니다: " + e.getMessage());
+            System.err.println("버전 정보를 가져오는 데 실패했습니다.");
         }
-        return macs;
     }
 }
-```
-  
-* 해당 검증기들은 개발이 더 필요합니다.
-
-## **6. 커스텀 검증기 만들기**
-
-`LicenseValidator` 인터페이스를 구현하여 프로젝트에 특화된 자신만의 검증 규칙을 만들 수 있습니다.
-
-~~~java
-// 예시: 특정 제품 이름이 포함되어 있는지 검증하는 커스텀 Validator
-public class ProductNameValidator implements LicenseValidator {
-    
-    @Override
-    public boolean validate(License license) {
-        // .proto에 productName 필드가 있다고 가정
-        return "MyAwesomeApp".equals(license.getProductName());
-    }
-
-    @Override
-    public String getErrorMessage() {
-        return "라이선스가 이 제품을 위한 것이 아닙니다.";
-    }
-}
-
-// 사용법
-ValidationChecker customChecker = new ValidationChecker.Builder()
-        .withPublicKey(publicKey)
-        .addRule(new ProductNameValidator()) // 빌더에 직접 만든 검증기 추가
-        .build();
 ~~~

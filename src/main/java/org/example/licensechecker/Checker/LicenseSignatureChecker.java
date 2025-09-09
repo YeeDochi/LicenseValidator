@@ -1,4 +1,4 @@
-package org.example.licensechecker.Vaildator;
+package org.example.licensechecker.Checker;
 
 import org.example.licensechecker.DTO.LicenseBody;
 import org.example.licensechecker.DTO.LicenseHeader;
@@ -17,8 +17,7 @@ public class LicenseSignatureChecker {
     private final String ASYMMETRIC_SIGNATURE_ALGORITHM = "SHA256withRSA";
 
     private final ObjectMapper objectMapper = new ObjectMapper();
-    public LicenseSignatureChecker() {
-    }
+
 
     public LicenseBody decodeLicenseKey(String licenseKey) throws Exception {
         String[] parts = licenseKey.split("\\.");
@@ -64,5 +63,17 @@ public class LicenseSignatureChecker {
             // 서명이 유효하지 않으면 예외 발생
             throw new SecurityException("License signature verification failed. The key may be tampered or invalid.");
         }
+    }
+
+    protected String getVirsion(String licenseKey)  throws Exception{
+        String[] parts = licenseKey.split("\\.");
+        if (parts.length != 3) {
+            throw new IllegalArgumentException("Invalid license key format. It must contain 3 parts separated by dots.");
+        }
+
+        String headerBase64 = parts[0];
+        String headerJson = new String(Base64.getUrlDecoder().decode(headerBase64), StandardCharsets.UTF_8);
+        LicenseHeader header = objectMapper.readValue(headerJson, LicenseHeader.class);
+        return header.license_v();
     }
 }
