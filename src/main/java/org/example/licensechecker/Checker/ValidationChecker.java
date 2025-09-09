@@ -1,7 +1,7 @@
 package org.example.licensechecker.Checker;
 
-import com.example.License.Proto.LicenseProtos;
 import org.example.licensechecker.Checker.Handlers.LicenseValidator;
+import org.example.licensechecker.DTO.LicenseBody;
 import org.example.licensechecker.Vaildator.LicenseSignatureChecker;
 
 import java.util.ArrayList;
@@ -21,7 +21,7 @@ public class ValidationChecker {
     public boolean check(String licenseSirial) {
         try {
             // RSA
-            LicenseProtos.License license = licenseSignatureChecker.decodeLicenseKey(licenseSirial);
+            LicenseBody license = licenseSignatureChecker.decodeLicenseKey(licenseSirial);
             if (license == null) return false;
 
             // 하드웨어와 대조
@@ -43,29 +43,10 @@ public class ValidationChecker {
 
     // --- Builder 클래스 ---
     public static class Builder {
-        private String publicKey;
-        private String secretKey;
-        private int gcmIvLength = 12; // 기본
-        private int gcmTagLength = 128; // 기본
+
 
         private final List<LicenseValidator> ruleValidators = new ArrayList<>();
 
-        public Builder withPublicKey(String publicKey) {
-            this.publicKey = publicKey;
-            return this;
-        }
-
-        public Builder withSecretKey(String secretKey) {
-            this.secretKey = secretKey;
-            return this;
-        }
-
-        // 필요시 GCM 파라미터 설정
-        public Builder withGcmParams(int ivLength, int tagLength) {
-            this.gcmIvLength = ivLength;
-            this.gcmTagLength = tagLength;
-            return this;
-        }
 
         public Builder addRule(LicenseValidator validator) {
             this.ruleValidators.add(validator);
@@ -73,13 +54,7 @@ public class ValidationChecker {
         }
 
         public ValidationChecker build() {
-            if (publicKey == null || publicKey.isEmpty()) {
-                throw new IllegalStateException("공개키가 없습니다.");
-            }
-            if (secretKey == null || secretKey.isEmpty()) {
-                throw new IllegalStateException("대칭키가 없습니다.");
-            }
-            LicenseSignatureChecker cryptoValidator = new LicenseSignatureChecker(publicKey, secretKey, gcmIvLength, gcmTagLength);
+            LicenseSignatureChecker cryptoValidator = new LicenseSignatureChecker();
             return new ValidationChecker(cryptoValidator, new ArrayList<>(ruleValidators));
         }
     }

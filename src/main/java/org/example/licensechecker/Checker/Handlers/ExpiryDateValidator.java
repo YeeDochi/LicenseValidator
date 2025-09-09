@@ -1,6 +1,6 @@
 package org.example.licensechecker.Checker.Handlers;
 
-import com.example.License.Proto.LicenseProtos;
+import org.example.licensechecker.DTO.LicenseBody;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeParseException;
@@ -8,8 +8,8 @@ import java.time.format.DateTimeParseException;
 
 public class ExpiryDateValidator implements LicenseValidator {
     @Override
-    public boolean validate(LicenseProtos.License license) {
-        String expiryDateStr = license.getExpireDate();
+    public boolean validate(LicenseBody licenseBody) {
+        String expiryDateStr = licenseBody.expiration();
 
         // 만료일이 설정되지 않았다면, 영구 라이선스로 간주하고 통과
         if (expiryDateStr == null || expiryDateStr.isEmpty()) {

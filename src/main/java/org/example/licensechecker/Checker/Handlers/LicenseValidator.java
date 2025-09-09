@@ -1,8 +1,9 @@
 package org.example.licensechecker.Checker.Handlers;
 
-import com.example.License.Proto.LicenseProtos;
+
+import org.example.licensechecker.DTO.LicenseBody;
 
 public interface LicenseValidator {
-    boolean validate(LicenseProtos.License license);
+    boolean validate(LicenseBody licenseBody);
     String getErrorMessage();
 }

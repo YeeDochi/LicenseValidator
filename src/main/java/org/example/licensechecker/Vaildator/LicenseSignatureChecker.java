@@ -1,78 +1,68 @@
 package org.example.licensechecker.Vaildator;
 
-import com.example.License.Proto.LicenseProtos;
-import org.apache.commons.codec.binary.Base32;
-import org.example.licensechecker.util.KeyLoader;
+import org.example.licensechecker.DTO.LicenseBody;
+import org.example.licensechecker.DTO.LicenseHeader;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
-import javax.crypto.Cipher;
-import javax.crypto.spec.GCMParameterSpec;
-import javax.crypto.spec.SecretKeySpec;
-import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
 
 public class LicenseSignatureChecker {
 
-    private final String publickey;
-    private final String secretKey; // 대칭키 추가
-    private final int gcmIvLength;
-    private final int gcmTagLength;
 
     private final String ASYMMETRIC_SIGNATURE_ALGORITHM = "SHA256withRSA";
-    private final String SYMMETRIC_ALGORITHM = "AES/GCM/NoPadding";
-    private KeyLoader keyLoader;
 
-    public LicenseSignatureChecker(String publickey, String secretKey, int gcmIvLength, int gcmTagLength) {
-        this.publickey = publickey;
-        this.secretKey = secretKey;
-        this.gcmIvLength = gcmIvLength;
-        this.gcmTagLength = gcmTagLength;
-        keyLoader = new KeyLoader(publickey);
+    private final ObjectMapper objectMapper = new ObjectMapper();
+    public LicenseSignatureChecker() {
     }
 
-    public LicenseProtos.License decodeLicenseKey(String formattedKey) throws Exception {
-        String base32Encoded = formattedKey.replace("-", "").toUpperCase().replaceAll("=", "");
-        String restoredBase32 = base32Encoded.replace('0', '=');
-        byte[] finalBytes = new Base32().decode(restoredBase32);
+    public LicenseBody decodeLicenseKey(String licenseKey) throws Exception {
+        String[] parts = licenseKey.split("\\.");
+        if (parts.length != 3) {
+            throw new IllegalArgumentException("Invalid license key format. It must contain 3 parts separated by dots.");
+        }
 
-        // 1. [iv]와 [암호화된 데이터] 분리
-        ByteBuffer byteBuffer = ByteBuffer.wrap(finalBytes);
-        byte[] iv = new byte[gcmIvLength];
-        byteBuffer.get(iv);
-        byte[] encryptedData = new byte[byteBuffer.remaining()];
-        byteBuffer.get(encryptedData);
+        String headerBase64 = parts[0];
+        String bodyBase64 = parts[1];
+        String signatureBase64 = parts[2];
 
-        // 2. 데이터 복호화 (AES/GCM)
-        SecretKeySpec keySpec = new SecretKeySpec(secretKey.getBytes(StandardCharsets.UTF_8), "AES");
-        GCMParameterSpec gcmSpec = new GCMParameterSpec(gcmTagLength, iv);
-        Cipher cipher = Cipher.getInstance(SYMMETRIC_ALGORITHM);
-        cipher.init(Cipher.DECRYPT_MODE, keySpec, gcmSpec);
-        // 복호화 결과물: [rawData 길이] + [rawData] + [signature]
-        byte[] decryptedBytes = cipher.doFinal(encryptedData);
+        // 2. Header와 Body를 디코딩하여 JSON 문자열로 변환
+        String headerJson = new String(Base64.getUrlDecoder().decode(headerBase64), StandardCharsets.UTF_8);
+        String bodyJson = new String(Base64.getUrlDecoder().decode(bodyBase64), StandardCharsets.UTF_8);
 
-        // 3. [rawData]와 [signature] 분리
-        ByteBuffer decryptedBuffer = ByteBuffer.wrap(decryptedBytes);
-        short rawDataLength = decryptedBuffer.getShort();
-        byte[] rawData = new byte[rawDataLength];
-        decryptedBuffer.get(rawData);
-        byte[] signature = new byte[decryptedBuffer.remaining()];
-        decryptedBuffer.get(signature);
+        // JSON을 객체로 변환
+        LicenseHeader header = objectMapper.readValue(headerJson, LicenseHeader.class);
+        LicenseBody body = objectMapper.readValue(bodyJson, LicenseBody.class);
 
-        // 4. 서명 검증 (RSA)
-        PublicKey publicKey = keyLoader.loadPublicKey();
-        Signature ecdsaVerify = Signature.getInstance(ASYMMETRIC_SIGNATURE_ALGORITHM);
-        ecdsaVerify.initVerify(publicKey);
-        // 원본 데이터(rawData)로 서명을 검증
-        ecdsaVerify.update(rawData);
-        boolean isValid = ecdsaVerify.verify(signature);
+        // 3. Body에 포함된 공개키를 사용하여 서명 검증 준비
+        String publicKeyString = body.publicKey();
+        byte[] keyBytes = Base64.getDecoder().decode(publicKeyString);
+        X509EncodedKeySpec spec = new X509EncodedKeySpec(keyBytes);
+        KeyFactory kf = KeyFactory.getInstance("RSA");
+        PublicKey publicKey = kf.generatePublic(spec);
 
+        // 4. 서명 검증 수행
+        // 서명은 인코딩된 'Header.Body' 부분을 원본으로 하여 생성되었으므로, 해당 부분을 사용
+        String headerAndBody = headerBase64 + "." + bodyBase64;
+        byte[] signatureBytes = Base64.getUrlDecoder().decode(signatureBase64);
+
+        Signature signature = Signature.getInstance(ASYMMETRIC_SIGNATURE_ALGORITHM);
+        signature.initVerify(publicKey);
+        signature.update(headerAndBody.getBytes(StandardCharsets.UTF_8));
+
+        boolean isValid = signature.verify(signatureBytes);
+
+        // 5. 결과 반환
         if (isValid) {
-            // 검증 성공 시 원본 데이터를 Protobuf 객체로 변환하여 반환
-            return LicenseProtos.License.parseFrom(rawData);
+            // 서명이 유효하면 라이선스 본문 내용 반환
+            return body;
         } else {
-            // 서명 검증 실패 시 null 반환
-            return null;
+            // 서명이 유효하지 않으면 예외 발생
+            throw new SecurityException("License signature verification failed. The key may be tampered or invalid.");
         }
     }
 }
